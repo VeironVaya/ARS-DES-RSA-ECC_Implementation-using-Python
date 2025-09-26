@@ -21,6 +21,9 @@ message = "HELLO"
 ciphertext = des_encrypt(message, key)
 decrypted_message = des_decrypt(ciphertext, key)
 
+
+print("key:",key)
+print("key lenght:",len(key))
 print("DES - Key (hex):", key.hex())
 print("DES - Encrypted (hex):", ciphertext.hex())
 print("DES - Decrypted:", decrypted_message)

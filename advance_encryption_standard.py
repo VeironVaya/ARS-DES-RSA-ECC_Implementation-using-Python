@@ -12,8 +12,6 @@ def aes_decrypt(ciphertext, key):
     iv = ciphertext[:AES.block_size]
     ct = ciphertext[AES.block_size:]
     print("blocksize:",AES.block_size)
-    print("iv:",iv)
-    print("ct:",ct)
     cipher = AES.new(key, AES.MODE_CBC, iv)
     decrypted = unpad(cipher.decrypt(ct), AES.block_size)
     return decrypted.decode()
