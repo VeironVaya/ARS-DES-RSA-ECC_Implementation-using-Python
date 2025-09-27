@@ -1,26 +1,31 @@
-from Crypto.PublicKey import RSA
-from Crypto.Cipher import PKCS1_OAEP
+from cryptography.hazmat.primitives.asymmetric import rsa, padding
+from cryptography.hazmat.primitives import hashes, serialization
 
+# Generate keys
+priv = rsa.generate_private_key(public_exponent=65537, key_size=2048)
+pub = priv.public_key()
 
-key = RSA.generate(2048)
-private_key = key
-public_key = key.publickey()
+# Encrypt (OAEP)
+plaintext = b"testing RSA"
+print("=== Plaintext ===")
+print(plaintext)
 
-def rsa_encrypt(plaintext, public_key):
-    cipher = PKCS1_OAEP.new(public_key)
-    encrypted = cipher.encrypt(plaintext.encode())
-    return encrypted
+ciphertext = pub.encrypt(
+    plaintext,
+    padding.OAEP(
+        mgf=padding.MGF1(algorithm=hashes.SHA256()),
+        algorithm=hashes.SHA256(),
+        label=None
+    )
+)
+print("=== Ciphertext ===")
+print(ciphertext)
 
-def rsa_decrypt(ciphertext, private_key):
-    cipher = PKCS1_OAEP.new(private_key)
-    decrypted = cipher.decrypt(ciphertext)
-    return decrypted.decode()
-
-message = "HELLO"
-ciphertext = rsa_encrypt(message, public_key)
-decrypted_message = rsa_decrypt(ciphertext, private_key)
-
-print("RSA - Encrypted:", ciphertext)
-print("")
-print("RSA - Decrypted:", decrypted_message)
-
+# Decrypt
+decrypted = priv.decrypt(
+    ciphertext,
+    padding.OAEP(mgf=padding.MGF1(hashes.SHA256()), algorithm=hashes.SHA256(), label=None)
+)
+print("Decrypted text:", decrypted)
+print("=== Decrypted text ===")
+print(decrypted)

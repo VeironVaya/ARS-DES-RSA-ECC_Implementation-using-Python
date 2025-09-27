@@ -1,71 +1,53 @@
 from cryptography.hazmat.primitives.asymmetric import ec
-from cryptography.hazmat.primitives import hashes
 from cryptography.hazmat.primitives.kdf.hkdf import HKDF
-from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
-from cryptography.hazmat.backends import default_backend
-import os
+from cryptography.hazmat.primitives import hashes, serialization
+from cryptography.hazmat.primitives.ciphers.aead import AESGCM
+from os import urandom
 
-# Generate ECC key pair
-private_key = ec.generate_private_key(ec.SECP256R1())
-public_key = private_key.public_key()
+# Generate private keys for Alice & Bob
+priv_a = ec.generate_private_key(ec.SECP256R1())
+priv_b = ec.generate_private_key(ec.SECP256R1())
 
-def ecc_encrypt(plaintext, public_key):
-    # Generate ephemeral key
-    ephemeral_key = ec.generate_private_key(ec.SECP256R1())
-    shared_secret = ephemeral_key.exchange(ec.ECDH(), public_key)
+pub_a = priv_a.public_key()
+pub_b = priv_b.public_key()
 
-    # Derive AES key
-    derived_key = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b"handshake data",
-    ).derive(shared_secret)
+print("=== Public Key Alice ===")
+print(pub_a.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo
+).decode())
 
-    # Encrypt with AES-GCM
-    iv = os.urandom(12)
-    encryptor = Cipher(
-        algorithms.AES(derived_key),
-        modes.GCM(iv),
-        backend=default_backend()
-    ).encryptor()
+print("=== Public Key Bob ===")
+print(pub_b.public_bytes(
+    encoding=serialization.Encoding.PEM,
+    format=serialization.PublicFormat.SubjectPublicKeyInfo
+).decode())
 
-    ciphertext = encryptor.update(plaintext.encode()) + encryptor.finalize()
+# ECDH shared secret
+shared_a = priv_a.exchange(ec.ECDH(), pub_b)
+shared_b = priv_b.exchange(ec.ECDH(), pub_a)
+assert shared_a == shared_b
 
-    return {
-        "ciphertext": ciphertext,
-        "tag": encryptor.tag,
-        "iv": iv,
-        "ephemeral_pub": ephemeral_key.public_key()
-    }
+print("=== Shared Secret (Alice & Bob) ===")
+print(shared_a.hex()) 
 
-def ecc_decrypt(enc_dict, private_key):
-    # Recreate shared secret
-    shared_secret = private_key.exchange(ec.ECDH(), enc_dict["ephemeral_pub"])
+# Derive symmetric key
+derived_key = HKDF(
+    algorithm=hashes.SHA256(), length=32, salt=None, info=b'handshake data'
+).derive(shared_a)
 
-    # Derive AES key
-    derived_key = HKDF(
-        algorithm=hashes.SHA256(),
-        length=32,
-        salt=None,
-        info=b"handshake data",
-    ).derive(shared_secret)
+# Use AES-GCM for message encryption
+aesgcm = AESGCM(derived_key)
+nonce = urandom(12)
+plaintext = b"testing ECC"
+ct = aesgcm.encrypt(nonce, plaintext, None)
+pt = aesgcm.decrypt(nonce, ct, None)
 
-    # Decrypt with AES-GCM
-    decryptor = Cipher(
-        algorithms.AES(derived_key),
-        modes.GCM(enc_dict["iv"], enc_dict["tag"]),
-        backend=default_backend()
-    ).decryptor()
+print("=== Plaintext ===")
+print(plaintext)
 
-    plaintext = decryptor.update(enc_dict["ciphertext"]) + decryptor.finalize()
-    return plaintext.decode()
+print("=== Ciphertext ===")
+print(ct.hex())
 
-# Example usage
-message = "HELLO"
-encrypted = ecc_encrypt(message, public_key)
-decrypted_message = ecc_decrypt(encrypted, private_key)
-
-print("ECC - Encrypted:", encrypted["ciphertext"])
-print("")
-print("ECC - Decrypted:", decrypted_message)
+print("=== Decrypted Text ===")
+print(pt)
